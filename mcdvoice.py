@@ -800,7 +800,8 @@ def enter_code(page, code: str) -> None:
 
 
 def run_survey(page, entry: dict, express: str | None = None,
-               profile: list | None = None, comment: str | None = None) -> str:
+               profile: list | None = None, comment: str | None = None,
+               items: str | None = None) -> str:
     """Walk one survey. Returns the new status for this code.
 
     `express` is a rating YOU supplied on the command line (e.g. "highly
@@ -971,16 +972,21 @@ def run_survey(page, entry: dict, express: str | None = None,
             labels = [b["label"] or f"(no label - {b['id']})" for b in boxes]
             page_q = page_text(page).split("\n")[0][:80]
 
-            picks = match_items(labels, entry.get("items") or "")
+            # --items on the command line overrides whatever the receipt says,
+            # so a whole batch can answer the product pages the same way.
+            use_items = items or entry.get("items") or ""
+            source = "--items" if items else "from this receipt's items"
+
+            picks = match_items(labels, use_items)
             if picks:
                 print(f"\n  {page_q}")
                 for i in picks:
-                    print(f"     -> {labels[i]}   [from this receipt's items]")
+                    print(f"     -> {labels[i]}   [{source}]")
             else:
-                if entry.get("items"):
-                    print(f"\n  Nothing in this receipt's items matched these "
-                          f"options, so I won't guess:")
-                    print(f"     items: {entry['items'][:90]}")
+                if use_items:
+                    print(f"\n  Nothing in the item list matched these options, "
+                          f"so I won't guess:")
+                    print(f"     items: {use_items[:90]}")
                 picks = ask_multi(page_q or "Select all that apply", labels)
                 if picks is None:
                     pause("Tick them in the browser window, then press Enter.")
@@ -1198,7 +1204,8 @@ def cmd_run(args) -> None:
             try:
                 try:
                     status = run_survey(page, entry, express=args.express,
-                                        profile=profile, comment=comment)
+                                        profile=profile, comment=comment,
+                                        items=args.items)
                 except KeyboardInterrupt:
                     print("\n\n  stopped. Nothing further submitted.")
                     entry["notes"] = "abandoned partway"
@@ -1304,6 +1311,11 @@ def main() -> None:
                             "ask every question")
     p_run.add_argument("--dump", metavar="DIR",
                        help="save every page's HTML there, for debugging")
+    p_run.add_argument("--items", metavar="LIST",
+                       help="use this item list for every survey instead of "
+                            "each code's own, e.g. --items 'nuggets, "
+                            "cheeseburger, soft drink'. Applies to codes "
+                            "imported later too.")
     p_run.add_argument("--express", metavar="RATING",
                        help="a rating you're supplying yourself, e.g. "
                             "--express 'highly satisfied'. Scale questions "
